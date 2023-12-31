@@ -10,6 +10,13 @@ function skew_symmetric(ω)
                     -ω[2] ω[1] 0]
 end
 
+function unskew_symmetric(M)
+    """
+    Returns 3-dimensional vector v from the skew-symmetric matrix M.
+    """
+    return @SVector [M[3,2];M[1,3];M[2,1]]
+end
+
 
 function L(q::Vector)
     """

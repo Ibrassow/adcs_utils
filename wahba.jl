@@ -118,7 +118,7 @@ landmarks = [[2.5, -5.75, 10],
              [1.0, -4.2, 3],
              [1.0, 0.0, 6]]
 
-landmarks = [rand(3) for i=1:100]
+landmarks = [rand(3) for i=1:10]
 
 
 
@@ -135,11 +135,22 @@ landmarks = Matrix(hcat(landmarks...)')
 measurements = []
 for i=1:sz
     landmark = landmarks[i, :]
-    v = true_att_Q' * (landmark - true_pos_eci)
+    v = true_att_Q' * (landmark - true_pos_eci) #+ randn(3)*0.1
     push!(measurements, v / norm(v))
 end
 measurements = Matrix(hcat(measurements...)')
 
 Qcvx, _ = solve_wahba_cvx_relaxation(landmarks, measurements)
+errQcvx = Matrix(true_att_Q' * Qcvx)
+err_cvx_deg = (180 / π) *  norm(unskew_symmetric(log(errQcvx)))
+@show err_cvx_deg
+
 Qsvd = solve_wahba_svd(landmarks, measurements)
+errQsvd = Matrix(true_att_Q' * Qsvd)
+err_svd_deg = (180 / π) *  norm(unskew_symmetric(log(errQsvd)))
+@show err_svd_deg
+
 qdav, Qdav = solve_wahba_davenport_q_method(landmarks, measurements)
+errQdav = Matrix(true_att_Q' * Qdav)
+err_dav_deg = (180 / π) *  norm(unskew_symmetric(log(errQdav)))
+@show err_dav_deg
