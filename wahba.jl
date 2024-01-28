@@ -2,6 +2,8 @@ using LinearAlgebra
 import Convex as cvx 
 using Mosek
 using MosekTools
+import ForwardDiff as FD
+using Printf
 
 include("transformations.jl")
 
@@ -101,6 +103,87 @@ function solve_wahba_davenport_q_method(landmarks::Matrix, measurements::Matrix)
 
 end
 
+function angular_error(q1,q2)
+    q = qconj(q1) ⊙ q2
+    return (2 * atan(norm(q[2:4]), q[1]))
+end
+
+
+function solve_wahba_multiplicative_gauss_newton(landmarks::Matrix, measurements::Matrix, q0::Vector; tol::Real=1e-6, max_iter::Real=1000)
+
+    sz = size(landmarks, 1)
+    
+
+    function residual(q)
+        r = zeros(eltype(q),sz*3) # loss fct is r'r
+        for i=1:sz
+            r[ (i-1)*3 + 1 : (i-1)*3 + 3] = measurements[i,:] - dcm_from_q(q) * landmarks[i, :]
+        end
+        return r
+    end
+
+    function loss(q)
+        r = residual(q)
+        return r' * r
+    end
+
+    # Jacobian w.r.t quaternion
+    Jquat(qval) = FD.ForwardDiff.jacobian(q -> residual(q), qval)
+    # Attitude Jacobian
+    G(q) = L(q) * [zeros(eltype(q), 1, 3); Matrix{eltype(q)}(I, 3, 3)]
+
+    # Initial guess
+    q = q0
+
+    for iter = 1:max_iter
+
+        jac = Jquat(q) * G(q)
+
+        # Three-parameter update step
+        ϕ = - inv(jac' * jac) * jac' * residual(q)
+
+        curr_loss = loss(q)
+
+        α = 1.0
+        new_loss = 0.0
+
+        # Line search 
+        for l=1:20
+
+            # line search step
+            qn = L(q) * quat_from_mrp(α * ϕ)
+
+            # new loss
+            new_loss = loss(qn)
+
+            if new_loss < curr_loss
+                # sufficient decrease ~ armijo? 
+                q = copy(qn)
+                break
+            else
+                # decrease step length
+                α = 0.5 * α
+            end
+
+
+        end
+
+        ΔL = new_loss - curr_loss
+        if (iter % 10) == 0
+            @printf "iter       new_loss            ΔL            α            \n"
+            @printf "-------------------------------------------------\n"
+        end
+
+        @printf("%3d    %10.3e      %10.3e      %9.2e       \n", iter, new_loss, ΔL, α)
+
+        if new_loss < tol
+            break
+        end
+
+    end
+
+    return q
+end
 
 # Ground truth
 true_pos_eci = [0, 0.0, 0.0]
@@ -154,3 +237,9 @@ qdav, Qdav = solve_wahba_davenport_q_method(landmarks, measurements)
 errQdav = Matrix(true_att_Q' * Qdav)
 err_dav_deg = (180 / π) *  norm(unskew_symmetric(log(errQdav)))
 @show err_dav_deg
+
+qgn = solve_wahba_multiplicative_gauss_newton(landmarks, measurements, qdav)
+Qgn = dcm_from_q(qgn)
+errQgn = Matrix(true_att_Q' * Qgn)
+err_gn_deg = (180 / π) *  norm(unskew_symmetric(log(errQgn)))
+@show err_gn_deg

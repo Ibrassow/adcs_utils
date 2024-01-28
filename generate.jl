@@ -4,10 +4,10 @@ include("transformations.jl")
 
 
 function random_vector(μ::Vector, P::Matrix=I)
-"""
+    """
     μ: mean vector
     P: covariance matrix
-"""
+    """
     n = size(μ, 1)
     Δ = cholesky(P).L  
 
