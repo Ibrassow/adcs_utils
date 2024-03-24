@@ -11,7 +11,7 @@ function random_vector(μ::Vector, P::Matrix=I)
     n = size(μ, 1)
     Δ = cholesky(P).L  
 
-    return μ + randn(n,1) * Δ
+    return μ +  Δ * randn(n,1)
 end
 
 
